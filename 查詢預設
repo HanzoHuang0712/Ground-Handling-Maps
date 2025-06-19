@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>星宇航空地勤主控系統 - 地圖搜尋</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f2f5;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 10px 20px;
+            font-size: 20px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .header .title {
+            margin-left: 10px;
+        }
+
+        .main-container {
+            display: flex;
+            flex-grow: 1;
+        }
+
+        .sidebar {
+            width: 220px;
+            background-color: #ffffff;
+            padding: 20px 0;
+            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .sidebar ul li {
+            padding: 15px 20px;
+            color: #333;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            display: flex;
+            align-items: center;
+        }
+
+        .sidebar ul li:hover,
+        .sidebar ul li.active {
+            background-color: #e0f7fa;
+            color: #007bff;
+            border-left: 4px solid #007bff;
+        }
+
+        .sidebar ul li i {
+            margin-right: 10px;
+            font-size: 18px;
+        }
+
+        .content-area {
+            flex-grow: 1;
+            padding: 20px;
+            display: flex;
+            position: relative;
+            background-color: #f0f2f5;
+        }
+
+        #map { /* Map container ID, this is where Leaflet will render the map */
+			flex-grow: 1;
+			background-color: #e6e6e6;
+			border-radius: 8px;
+			overflow: hidden;
+			position: relative; /* 保持 relative，以便內部元素可以 absolute 定位 */
+			z-index: 1; /* 給地圖一個較低的 z-index */
+        }
+
+        .search-panel-wrapper {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+        }
+
+        .search-panel {
+            background-color: rgba(255, 255, 255, 0.95);
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            padding: 20px;
+            width: 300px;
+            box-sizing: border-box;
+        }
+
+        .search-panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            font-weight: bold;
+            color: #333;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        .search-panel-header .close-btn {
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: #666;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+            color: #555;
+            display: flex;
+            align-items: center;
+        }
+
+        .form-group label .required-icon {
+            color: #dc3545;
+            margin-left: 5px;
+            font-size: 16px;
+        }
+
+        .form-group input[type="text"],
+        .form-group input[type="date"],
+        .form-group input[type="time"],
+        .form-group select {
+            width: calc(100% - 20px);
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+            background-color: #f8f8f8;
+        }
+
+        .form-group .datetime-input {
+            display: flex;
+            gap: 10px;
+        }
+
+        .form-group .datetime-input input {
+            flex: 1;
+        }
+
+        .button-group {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .button-group button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: bold;
+            transition: background-color 0.3s ease;
+        }
+
+        .button-group .query-btn {
+            background-color: #007bff;
+            color: white;
+        }
+
+        .button-group .query-btn:hover {
+            background-color: #0056b3;
+        }
+
+        .button-group .reset-btn {
+            background-color: #6c757d;
+            color: white;
+        }
+
+        .button-group .reset-btn:hover {
+            background-color: #5a6268;
+        }
+
+        .utility-buttons {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 10;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .utility-buttons button {
+            background-color: white;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            color: #333;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .utility-buttons button i {
+            font-size: 16px;
+        }
+
+        .utility-buttons .dropdown-arrow {
+            margin-left: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="title">星宇航空地勤主控系統 (Header)</div>
+    </div>
+
+    <div class="main-container">
+        <div class="sidebar">
+            <ul>
+                <li class="active">
+                    <i class="fas fa-desktop"></i> 作業監控
+                </li>
+                <li>
+                    <i class="fas fa-map-marked-alt"></i> 電子地圖
+                </li>
+                <li>
+                    <i class="fas fa-comments"></i> 即時通訊
+                </li>
+                <li>
+                    <i class="fas fa-truck"></i> 盤櫃追蹤
+                </li>
+                <li>
+                    <i class="fas fa-wifi"></i> 電子裝載
+                </li>
+                <li>
+                    <i class="fas fa-exclamation-triangle"></i> 警示系統
+                </li>
+            </ul>
+        </div>
+
+        <div class="content-area">
+            <div id="map">
+                </div>
+
+            <div class="search-panel-wrapper">
+                <div class="search-panel">
+                    <div class="search-panel-header">
+                        <span>裝備查詢</span>
+                        <button class="close-btn">&times;</button>
+                    </div>
+                    <div class="form-group">
+                        <label for="query-time">
+                            查詢時間
+                            <span class="required-icon">*</span>
+                        </label>
+                        <div class="datetime-input">
+                            <input type="date" id="query-date" value="2024-01-01">
+                            <input type="time" id="query-time" value="09:00">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="device-type">裝備種類</label>
+                        <select id="device-type">
+                            <option value="">請選擇</option>
+                            <option value="tractor">牽引車</option>
+                            <option value="loader">裝載機</option>
+                            <option value="belt_loader">皮帶裝載機</option>
+                            <option value="pallet_dolly">貨盤拖車</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="device-id">裝備編號</label>
+                        <input type="text" id="device-id" placeholder="請輸入裝備編號">
+                    </div>
+                    <div class="button-group">
+                        <button class="query-btn">查詢</button>
+                        <button class="reset-btn">重設</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="utility-buttons">
+                <button>
+                    <i class="fas fa-layer-group"></i> 圖層開關
+                </button>
+                <button>
+                    <i class="fas fa-chart-bar"></i> 儀錶盤管理 <i class="fas fa-caret-down dropdown-arrow"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+        // 初始化地圖
+        var map = L.map('map').setView([25.080194, 121.234944], 16); // 這裡設置中心點為台中市的經緯度，並設定初始縮放級別
+
+        // 添加一個基本的圖層 (例如 OpenStreetMap)
+        // 這是 Leaflet 的標準底圖，可以用來確認地圖是否正常顯示
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        // ==========================================================
+        // 介接 WMS 服務範例
+        // 您需要替換這裡的 URL 和 layers 參數為您實際的 WMS 服務資訊
+        // ==========================================================
+        var wmsLayer = L.tileLayer.wms('YOUR_WMS_SERVICE_URL', {
+            layers: 'YOUR_WMS_LAYER_NAME', // WMS 服務提供的圖層名稱
+            format: 'image/png', // 圖片格式
+            transparent: true, // 是否透明
+            version: '1.3.0', // WMS 版本，通常是 1.1.1 或 1.3.0
+            attribution: '您的 WMS 服務提供者' // 版權資訊
+        }).addTo(map);
+
+        // ==========================================================
+        // 介接 WTMS 服務範例 (通常更簡單，因為 WMTS 是瓦片服務)
+        // 您需要替換這裡的 URL 和其他參數為您實際的 WTMS 服務資訊
+        // ==========================================================
+        // var wmtsLayer = L.tileLayer('YOUR_WMTS_SERVICE_URL/{z}/{x}/{y}.png', {
+        //     attribution: '您的 WMTS 服務提供者',
+        //     maxZoom: 19
+        // }).addTo(map);
+
+        // 如果您的 WMTS 服務需要特定的 TileMatrixSet 或其他複雜參數，
+        // 可能需要額外的 Leaflet 插件，例如 Leaflet.TileLayer.WMTS
+        // L.tileLayer.wmts('YOUR_WMTS_GETCAPABILITIES_URL', {
+        //     layer: 'YOUR_WMTS_LAYER_NAME',
+        //     style: 'default',
+        //     tilematrixSet: 'WebMercatorQuad', // 或您的 WMTS 服務定義的 TileMatrixSet
+        //     format: 'image/png',
+        //     attribution: '您的 WTMS 服務提供者'
+        // }).addTo(map);
+
+
+        // 範例：點擊地圖獲取坐標
+        map.on('click', function(e) {
+            console.log("Latitude: " + e.latlng.lat + ", Longitude: " + e.latlng.lng);
+            // 您可以在這裡添加標記、彈窗等
+        });
+
+        // ==========================================================
+        // 搜尋功能（需配合後端服務）
+        // ==========================================================
+        document.querySelector('.query-btn').addEventListener('click', function() {
+            const queryDate = document.getElementById('query-date').value;
+            const queryTime = document.getElementById('query-time').value;
+            const deviceType = document.getElementById('device-type').value;
+            const deviceId = document.getElementById('device-id').value;
+
+            // 在這裡發送 AJAX 請求到後端服務
+            // 後端服務會根據查詢條件，從資料庫或 GIS 系統中獲取圖徵的位置資訊
+            // 然後將結果以 GeoJSON 或其他格式返回給前端
+
+            console.log('查詢條件:', {
+                date: queryDate,
+                time: queryTime,
+                type: deviceType,
+                id: deviceId
+            });
+
+            // 假設後端返回 GeoJSON 數據，您可以使用 Leaflet 載入並顯示
+            // 這裡只是一個示意性的 GeoJSON 數據
+            const dummyGeoJson = {
+                "type": "FeatureCollection",
+                "features": [
+                    {
+                        "type": "Feature",
+                        "properties": {
+                            "name": "牽引車-A001",
+                            "time": "2024-01-01T09:00:00Z"
+                        },
+                        "geometry": {
+                            "type": "Point",
+                            "coordinates": [120.655, 24.179] // 經度, 緯度
+                        }
+                    },
+                    {
+                        "type": "Feature",
+                        "properties": {
+                            "name": "裝載機-B002",
+                            "time": "2024-01-01T09:00:00Z"
+                        },
+                        "geometry": {
+                            "type": "Point",
+                            "coordinates": [120.660, 24.175]
+                        }
+                    }
+                ]
+            };
+
+            // 清除現有圖徵 (如果有的話)
+            if (map.hasLayer(geojsonLayer)) {
+                map.removeLayer(geojsonLayer);
+            }
+
+            // 載入並顯示 GeoJSON 數據
+            var geojsonLayer = L.geoJSON(dummyGeoJson, {
+                onEachFeature: function (feature, layer) {
+                    if (feature.properties && feature.properties.name) {
+                        layer.bindPopup("<b>裝備名稱:</b> " + feature.properties.name + "<br><b>查詢時間:</b> " + feature.properties.time);
+                    }
+                },
+                pointToLayer: function (feature, latlng) {
+                    // 可以自定義點的樣式，例如使用圖標
+                    return L.marker(latlng);
+                }
+            }).addTo(map);
+
+            // 將地圖視圖調整到所有圖徵的範圍
+            map.fitBounds(geojsonLayer.getBounds());
+        });
+
+        document.querySelector('.reset-btn').addEventListener('click', function() {
+            document.getElementById('query-date').value = '2024-01-01';
+            document.getElementById('query-time').value = '09:00';
+            document.getElementById('device-type').value = '';
+            document.getElementById('device-id').value = '';
+            // 清除地圖上的查詢結果
+            if (map.hasLayer(geojsonLayer)) {
+                map.removeLayer(geojsonLayer);
+            }
+        });
+
+        // 關閉搜尋面板 (可選功能)
+        document.querySelector('.close-btn').addEventListener('click', function() {
+            document.querySelector('.search-panel-wrapper').style.display = 'none';
+        });
+    </script>
+</body>
+</html>
