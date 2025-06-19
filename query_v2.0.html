@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>星宇航空地勤主控系統 - 地圖搜尋</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f2f5;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 10px 20px;
+            font-size: 20px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .header .title {
+            margin-left: 10px;
+        }
+
+        .main-container {
+            display: flex;
+            flex-grow: 1;
+        }
+
+        .sidebar {
+            width: 220px;
+            background-color: #ffffff;
+            padding: 20px 0;
+            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .sidebar ul li {
+            padding: 15px 20px;
+            color: #333;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            display: flex;
+            align-items: center;
+        }
+
+        .sidebar ul li:hover,
+        .sidebar ul li.active {
+            background-color: #e0f7fa;
+            color: #007bff;
+            border-left: 4px solid #007bff;
+        }
+
+        .sidebar ul li i {
+            margin-right: 10px;
+            font-size: 18px;
+        }
+
+        .content-area {
+            flex-grow: 1;
+            padding: 20px;
+            display: flex;
+            position: relative;
+            background-color: #f0f2f5;
+        }
+
+        #map {
+            flex-grow: 1;
+            background-color: #e6e6e6;
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+            z-index: 1; /* 地圖在下方 */
+        }
+
+        .search-panel-wrapper {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 1000; /* 確保搜尋面板在最上層 */
+        }
+
+        .search-panel {
+            background-color: rgba(255, 255, 255, 0.95);
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            padding: 20px;
+            width: 350px; /* 增加搜尋面板寬度，以容納輸入框 */
+            box-sizing: border-box;
+            max-height: calc(100vh - 80px); /* 限制高度，防止內容過多 */
+            overflow-y: auto; /* 內容溢出時滾動 */
+            display: flex;
+            flex-direction: column; /* Use flex column for layout */
+        }
+
+        .search-panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            font-weight: bold;
+            color: #333;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        .search-panel-header .close-btn {
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: #666;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+            color: #555;
+            display: flex;
+            align-items: center;
+        }
+
+        .form-group label .required-icon {
+            color: #dc3545;
+            margin-left: 5px;
+            font-size: 16px;
+        }
+
+        /* 統一輸入框和下拉選單的樣式 */
+        .form-group input[type="text"],
+        .form-group input[type="date"],
+        .form-group input[type="time"],
+        .form-group select { /* Add select here */
+            width: 100%; /* Make them fill 100% of parent .form-group */
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box; /* Crucial for width calculation */
+            background-color: #f8f8f8;
+            height: 38px; /* Set a fixed height for consistency */
+        }
+
+        .form-group .datetime-input {
+            display: flex;
+            gap: 10px; /* 控制日期和時間輸入框之間的間距 */
+        }
+
+        .form-group .datetime-input input {
+            flex: 1; /* 讓日期和時間輸入框平均分配空間 */
+        }
+
+        /* Select2 樣式調整 */
+        .select2-container {
+            width: 100% !important; /* Important for select2 to take full width of its parent */
+        }
+        .select2-container .select2-selection--multiple {
+            min-height: 38px; /* 確保高度與其他輸入框一致 */
+            border: 1px solid #ccc !important;
+            border-radius: 4px !important;
+            background-color: #f8f8f8 !important;
+        }
+        .select2-container--default .select2-selection--multiple .select2-selection__choice {
+            background-color: #e4e4e4;
+            border: 1px solid #aaa;
+            border-radius: 4px;
+            padding: 0 5px;
+            margin-top: 5px;
+        }
+        .select2-container--default .select2-selection--multiple .select2-selection__choice__remove {
+            color: #999;
+            float: right;
+            margin-left: 5px;
+        }
+        .select2-container--default.select2-container--focus .select2-selection--multiple {
+            border: solid #80bdff 1px !important; /* 焦點時的邊框顏色 */
+            box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25); /* 焦點時的陰影 */
+        }
+
+
+        .button-group {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
+            border-top: 1px solid #eee; /* 分隔線 */
+            padding-top: 15px;
+        }
+
+        .button-group button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: bold;
+            transition: background-color 0.3s ease;
+        }
+
+        .button-group .query-btn {
+            background-color: #007bff;
+            color: white;
+        }
+
+        .button-group .query-btn:hover {
+            background-color: #0056b3;
+        }
+
+        .button-group .reset-btn {
+            background-color: #6c757d;
+            color: white;
+        }
+
+        .button-group .reset-btn:hover {
+            background-color: #5a6268;
+        }
+
+        .utility-buttons {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 10;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .utility-buttons button {
+            background-color: white;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            color: #333;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .utility-buttons button i {
+            font-size: 16px;
+        }
+
+        .utility-buttons .dropdown-arrow {
+            margin-left: 5px;
+        }
+
+        /* Query Results Area - Integrated into search-panel */
+        .query-results {
+            margin-top: 20px;
+            border-top: 1px solid #eee;
+            padding-top: 15px;
+            flex-grow: 1; /* Allow results to take available space */
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto; /* Enable scrolling if results overflow */
+        }
+
+        .query-results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            color: #333;
+            font-weight: bold;
+        }
+
+        .query-results-header h4 {
+            margin: 0;
+        }
+
+        .query-results-header .back-btn {
+            background: none;
+            border: none;
+            color: #007bff;
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .query-results-header .back-btn:hover {
+            text-decoration: underline;
+        }
+
+        .result-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .result-item {
+            background-color: #f9f9f9;
+            border: 1px solid #eee;
+            border-radius: 4px;
+            padding: 10px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+            color: #555;
+        }
+
+        .result-item .details {
+            flex-grow: 1;
+        }
+
+        .result-item .actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .result-item button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px; /* Slightly smaller for compactness */
+            transition: background-color 0.3s ease;
+        }
+
+        .result-item button:hover {
+            background-color: #0056b3;
+        }
+
+        .result-item button.view-detail-btn {
+            background-color: #28a745;
+        }
+        .result-item button.view-detail-btn:hover {
+            background-color: #218838;
+        }
+
+        .result-item.no-results {
+            text-align: center;
+            color: #888;
+            padding: 20px;
+            background-color: #fff;
+            flex-shrink: 0; /* Prevent from shrinking when results are added */
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="title">星宇航空地勤主控系統 (Header)</div>
+    </div>
+
+    <div class="main-container">
+        <div class="sidebar">
+            <ul>
+                <li class="active">
+                    <i class="fas fa-desktop"></i> 作業監控
+                </li>
+                <li>
+                    <i class="fas fa-map-marked-alt"></i> 電子地圖
+                </li>
+                <li>
+                    <i class="fas fa-comments"></i> 即時通訊
+                </li>
+                <li>
+                    <i class="fas fa-truck"></i> 盤櫃追蹤
+                </li>
+                <li>
+                    <i class="fas fa-wifi"></i> 電子裝載
+                </li>
+                <li>
+                    <i class="fas fa-exclamation-triangle"></i> 警示系統
+                </li>
+            </ul>
+        </div>
+
+        <div class="content-area">
+            <div id="map">
+                </div>
+
+            <div class="search-panel-wrapper">
+                <div class="search-panel">
+                    <div class="search-panel-header">
+                        <span>裝備查詢</span>
+                        <button class="close-btn">&times;</button>
+                    </div>
+                    <div class="form-group">
+                        <label for="start-date">
+                            開始時間
+                            <span class="required-icon">*</span>
+                        </label>
+                        <div class="datetime-input">
+                            <input type="date" id="start-date">
+                            <input type="time" id="start-time">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="end-date">
+                            結束時間
+                            <span class="required-icon">*</span>
+                        </label>
+                        <div class="datetime-input">
+                            <input type="date" id="end-date">
+                            <input type="time" id="end-time">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="device-type">裝備種類</label>
+                        <select id="device-type">
+                            <option value="">請選擇</option>
+                            <option value="tractor">牽引車</option>
+                            <option value="loader">裝載機</option>
+                            <option value="belt_loader">皮帶裝載機</option>
+                            <option value="pallet_dolly">貨盤拖車</option>
+                            <option value="apu">APU</option>
+                            <option value="chock">止輪檔</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="device-ids">裝備編號</label>
+                        <select class="form-control" id="device-ids" multiple="multiple" style="width: 100%;">
+                            </select>
+                    </div>
+                    <div class="button-group">
+                        <button class="query-btn">查詢</button>
+                        <button class="reset-btn">重設</button>
+                    </div>
+
+                    <div class="query-results">
+                        <div class="query-results-header">
+                            <button class="back-btn" style="display:none;"><i class="fas fa-arrow-left"></i> 返回</button>
+                            <h4 id="resultsTitle">查詢結果</h4>
+                        </div>
+                        <ul id="result-list" class="result-list">
+                            <li class="result-item no-results">
+                                尚無查詢結果
+                            </li>
+                            </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="utility-buttons">
+                <button>
+                    <i class="fas fa-layer-group"></i> 圖層開關
+                </button>
+                <button>
+                    <i class="fas fa-chart-bar"></i> 儀錶盤管理 <i class="fas fa-caret-down dropdown-arrow"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+    <script>
+        // Leaflet Map Initialization
+        // Adjust initial view for Taoyuan International Airport Area, which is closer to the provided coordinates
+        // TPE Airport approximate center: 25.078 N, 121.232 E
+        var map = L.map('map').setView([25.078, 121.232], 14);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        // Global layers to manage markers and polylines
+        var currentMarkersLayer = L.layerGroup().addTo(map); // For last known positions and individual historical points
+        var currentTrackLayers = L.layerGroup().addTo(map); // For full tracks
+        var allQueryResultData = {}; // Store all query data for "view more" functionality
+        var currentDisplayedLevel = 'first'; // 'first' or 'second' for query results panel
+
+        // ==========================================================
+        // Select2 Initialization for Device IDs
+        // ==========================================================
+        $(document).ready(function() {
+            // Simulate device IDs for the dropdown
+            const allDeviceIds = [
+                "TRACTOR-001", "TRACTOR-002", "TRACTOR-003", "LOADER-A", "LOADER-B",
+                "BELTLOAD-X", "BELTLOAD-Y", "PALLET-DOLLY-10", "PALLET-DOLLY-11",
+                "APU-S01", "CHOCK-C05", "TRACTOR-004", "LOADER-C"
+            ];
+
+            $('#device-ids').select2({
+                placeholder: "請選擇或輸入裝備編號",
+                allowClear: true, // Allows clearing selected options
+                tags: true, // Allows creating new tags (if not found in list)
+                data: allDeviceIds.map(id => ({ id: id, text: id })) // Format for Select2
+            });
+
+            // Set default date and time to current time when page loads
+            const now = new Date();
+            const twoWeeksAgo = new Date(now.getTime() - (14 * 24 * 60 * 60 * 1000));
+
+            document.getElementById('end-date').value = formatDate(now);
+            document.getElementById('end-time').value = formatTime(now);
+            document.getElementById('start-date').value = formatDate(twoWeeksAgo);
+            document.getElementById('start-time').value = formatTime(twoWeeksAgo);
+
+            // Date validation for max two weeks
+            document.getElementById('end-date').addEventListener('change', validateDateRange);
+            document.getElementById('start-date').addEventListener('change', validateDateRange);
+        });
+
+        function validateDateRange() {
+            const startDateInput = document.getElementById('start-date');
+            const endDateInput = document.getElementById('end-date');
+            const startDate = new Date(startDateInput.value);
+            const endDate = new Date(endDateInput.value);
+            const now = new Date(); // Current date and time
+            
+            // Adjust now to the end of the day for date comparisons only
+            const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+            if (startDateInput.value && endDateInput.value) { // Only validate if both dates are selected
+                if (endDate.getTime() > todayEnd.getTime()) {
+                    alert('結束日期不能晚於今天！');
+                    endDateInput.value = formatDate(now); // Set to current date
+                    return;
+                }
+
+                if (endDate.getTime() < startDate.getTime()) {
+                    alert('結束日期不能早於開始日期！');
+                    endDateInput.value = startDateInput.value; // Set to start date
+                    return;
+                }
+                
+                const twoWeeksLater = new Date(startDate.getTime() + (14 * 24 * 60 * 60 * 1000));
+                
+                if (endDate.getTime() > twoWeeksLater.getTime()) {
+                    alert('結束日期不能超過開始日期兩週！');
+                    // Calculate date two weeks after start date, but not beyond today
+                    const proposedEndDate = new Date(startDate.getTime() + (14 * 24 * 60 * 60 * 1000));
+                    endDateInput.value = formatDate(proposedEndDate.getTime() > now.getTime() ? now : proposedEndDate);
+                }
+            }
+        }
+
+
+        // Custom icon for the last known position
+        var lastPositionIcon = L.icon({
+            iconUrl: 'https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -34],
+            shadowSize: [41, 41]
+        });
+
+        // Custom icon for historical points
+        var historyPointIcon = L.icon({
+            iconUrl: 'https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -34],
+            shadowSize: [41, 41]
+        });
+
+        // Function to clear all current query results from map and list
+        function clearAllMapResults() {
+            currentMarkersLayer.clearLayers();
+            currentTrackLayers.clearLayers();
+        }
+
+        // ==========================================================
+        // Query Functionality (Simulated Backend Response)
+        // ==========================================================
+        document.querySelector('.query-btn').addEventListener('click', async function() {
+            const startDate = document.getElementById('start-date').value;
+            const startTime = document.getElementById('start-time').value;
+            const endDate = document.getElementById('end-date').value;
+            const endTime = document.getElementById('end-time').value;
+            const deviceType = document.getElementById('device-type').value;
+            const deviceIds = $('#device-ids').val(); // Get selected device IDs from Select2
+
+            if (!startDate || !startTime || !endDate || !endTime) {
+                alert('請填寫完整的開始和結束時間！');
+                return;
+            }
+            if (deviceIds.length === 0) {
+                alert('請選擇至少一個裝備編號！');
+                return;
+            }
+
+            console.log('查詢條件:', {
+                startDate: startDate,
+                startTime: startTime,
+                endDate: endDate,
+                endTime: endTime,
+                type: deviceType,
+                ids: deviceIds
+            });
+
+            // Simulate API call to backend
+            const data = generateDummyLocationData(deviceIds, startDate, startTime, endDate, endTime);
+
+            clearAllMapResults(); // Clear previous map results
+
+            allQueryResultData = {}; // Clear previous stored data
+            const resultList = document.getElementById('result-list');
+            resultList.innerHTML = ''; // Clear current result list content
+
+            if (data.length === 0) {
+                resultList.innerHTML = '<li class="result-item no-results">無符合條件的裝備位置</li>';
+                renderResultsFirstLevel(); // Ensure correct header and view
+                return;
+            }
+
+            let bounds = new L.LatLngBounds(); // To fit map to all results
+
+            data.forEach(deviceResult => {
+                const latestLocation = deviceResult.latestPosition;
+                // Store full track and latest position for rendering
+                allQueryResultData[deviceResult.deviceId] = deviceResult;
+
+                if (latestLocation) {
+                    const latlng = [latestLocation.latitude, latestLocation.longitude];
+                    const deviceName = deviceResult.deviceId;
+                    const lastUpdateTime = new Date(latestLocation.timestamp).toLocaleString();
+
+                    // Add marker for the last known position on the main map
+                    const marker = L.marker(latlng, { icon: lastPositionIcon })
+                                .addTo(currentMarkersLayer)
+                                .bindPopup(`<b>${deviceName}</b><br>最後位置: ${latlng[0].toFixed(5)}, ${latlng[1].toFixed(5)}<br>時間: ${lastUpdateTime}`);
+                    
+                    bounds.extend(latlng);
+                }
+            });
+
+            // Fit map to bounds if there are results
+            if (bounds.isValid()) {
+                map.fitBounds(bounds, { padding: [50, 50] });
+            }
+
+            renderResultsFirstLevel(); // Render the first level of results in the panel
+        });
+
+        // ==========================================================
+        // Query Results Panel Functionality
+        // ==========================================================
+        const resultList = document.getElementById('result-list');
+        const resultsTitle = document.getElementById('resultsTitle');
+        const backBtn = document.querySelector('.query-results-header .back-btn');
+
+        // Event listener for "查看" and "查看詳細資料" buttons (delegation)
+        resultList.addEventListener('click', function(event) {
+            // "查看" button (zoom to specific point on map)
+            if (event.target.classList.contains('view-on-map-btn')) {
+                const lat = parseFloat(event.target.dataset.lat);
+                const lng = parseFloat(event.target.dataset.lng);
+                map.flyTo([lat, lng], 18); // Fly to the location with higher zoom
+            }
+
+            // "查看詳細資料" button (show full track for one device)
+            if (event.target.classList.contains('view-detail-btn')) {
+                const deviceId = event.target.dataset.deviceId;
+                renderResultsSecondLevel(deviceId);
+            }
+        });
+
+        // Back button in results panel (from second level to first level)
+        backBtn.onclick = function() {
+            renderResultsFirstLevel();
+        };
+
+        function renderResultsFirstLevel() {
+            currentDisplayedLevel = 'first';
+            resultsTitle.textContent = '查詢結果';
+            backBtn.style.display = 'none';
+            resultList.innerHTML = ''; // Clear current content
+
+            // Clear map track and re-add only latest markers
+            clearAllMapResults();
+            let bounds = new L.LatLngBounds();
+
+            // Re-populate with the latest positions of all queried devices
+            const deviceResultsArray = Object.values(allQueryResultData);
+            if (deviceResultsArray.length === 0) {
+                resultList.innerHTML = '<li class="result-item no-results">無符合條件的裝備位置</li>';
+                return;
+            }
+
+            deviceResultsArray.forEach(deviceResult => {
+                const latestLocation = deviceResult.latestPosition;
+                if (latestLocation) {
+                    const latlng = [latestLocation.latitude, latestLocation.longitude];
+                    const deviceName = deviceResult.deviceId;
+                    const lastUpdateTime = new Date(latestLocation.timestamp).toLocaleString();
+
+                    // Add marker for the last known position on the main map
+                    const marker = L.marker(latlng, { icon: lastPositionIcon })
+                                .addTo(currentMarkersLayer)
+                                .bindPopup(`<b>${deviceName}</b><br>最後位置: ${latlng[0].toFixed(5)}, ${latlng[1].toFixed(5)}<br>時間: ${lastUpdateTime}`);
+                    bounds.extend(latlng);
+
+                    const listItem = document.createElement('li');
+                    listItem.className = 'result-item';
+                    listItem.innerHTML = `
+                        <div class="details">
+                            <strong>裝備種類:</strong> ${deviceResult.deviceType || 'N/A'}<br>
+                            <strong>裝備編號:</strong> ${deviceName}<br>
+                            <strong>時間:</strong> ${lastUpdateTime}<br>
+                            <strong>座標:</strong> ${latlng[0].toFixed(5)}, ${latlng[1].toFixed(5)}
+                        </div>
+                        <div class="actions">
+                            <button class="view-on-map-btn" data-lat="${latlng[0]}" data-lng="${latlng[1]}">查看</button>
+                            <button class="view-detail-btn" data-device-id="${deviceName}">查看詳細資料</button>
+                        </div>
+                    `;
+                    resultList.appendChild(listItem);
+                }
+            });
+
+            if (bounds.isValid()) {
+                map.fitBounds(bounds, { padding: [50, 50] });
+            }
+        }
+
+        function renderResultsSecondLevel(deviceId) {
+            currentDisplayedLevel = 'second';
+            resultsTitle.textContent = `${deviceId} - 詳細軌跡`;
+            backBtn.style.display = 'flex'; // Show back button
+            resultList.innerHTML = ''; // Clear current content
+
+            const deviceData = allQueryResultData[deviceId];
+            if (!deviceData || !deviceData.fullTrack || deviceData.fullTrack.length === 0) {
+                resultList.innerHTML = '<li class="result-item no-results">無此裝備的詳細軌跡數據。</li>';
+                return;
+            }
+
+            const fullTrack = deviceData.fullTrack.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp)); // Sort by time
+
+            // Clear map and draw the track for this specific device
+            clearAllMapResults(); // Clear all current markers and tracks
+
+            const latlngs = fullTrack.map(loc => [loc.latitude, loc.longitude]);
+            const polyline = L.polyline(latlngs, {
+                color: 'red',
+                weight: 4,
+                opacity: 0.7
+            }).addTo(currentTrackLayers); // Add to track layer group
+
+            // Add start and end markers for the track
+            L.marker(latlngs[0], {
+                icon: L.divIcon({
+                    className: 'custom-div-icon',
+                    html: '<div style="background-color: green; color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 10px;">始</div>',
+                    iconSize: [20, 20],
+                    iconAnchor: [10, 10]
+                })
+            }).addTo(currentTrackLayers).bindPopup(`<b>${deviceId}</b><br>開始位置: ${latlngs[0][0].toFixed(5)}, ${latlngs[0][1].toFixed(5)}<br>時間: ${new Date(fullTrack[0].timestamp).toLocaleString()}`);
+
+            L.marker(latlngs[latlngs.length - 1], {
+                icon: L.divIcon({
+                    className: 'custom-div-icon',
+                    html: '<div style="background-color: orange; color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 10px;">終</div>',
+                    iconSize: [20, 20],
+                    iconAnchor: [10, 10]
+                })
+            }).addTo(currentTrackLayers).bindPopup(`<b>${deviceId}</b><br>結束位置: ${latlngs[latlngs.length-1][0].toFixed(5)}, ${latlngs[latlngs.length-1][1].toFixed(5)}<br>時間: ${new Date(fullTrack[fullTrack.length-1].timestamp).toLocaleString()}`);
+
+            map.fitBounds(polyline.getBounds(), { padding: [50, 50] }); // Zoom to fit the track
+
+            // Populate results list with all points of this device
+            fullTrack.forEach((location, index) => {
+                const listItem = document.createElement('li');
+                listItem.className = 'result-item';
+                const updateTime = new Date(location.timestamp).toLocaleString();
+                listItem.innerHTML = `
+                    <div class="details">
+                        <strong>時間:</strong> ${updateTime}<br>
+                        <strong>座標:</strong> ${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}
+                    </div>
+                    <div class="actions">
+                        <button class="view-on-map-btn" data-lat="${location.latitude}" data-lng="${location.longitude}">查看</button>
+                    </div>
+                `;
+                resultList.appendChild(listItem);
+                
+                // Add a small marker for each historical point on the map
+                // Only add if not the start/end point (to avoid duplicate markers)
+                if (index !== 0 && index !== fullTrack.length - 1) {
+                    L.marker([location.latitude, location.longitude], { icon: historyPointIcon })
+                        .addTo(currentMarkersLayer)
+                        .bindPopup(`<b>${deviceId}</b><br>時間: ${updateTime}<br>點位 ${index + 1}`);
+                }
+            });
+        }
+
+
+        // Reset functionality
+        document.querySelector('.reset-btn').addEventListener('click', function() {
+            // Reset form fields
+            const now = new Date();
+            const twoWeeksAgo = new Date(now.getTime() - (14 * 24 * 60 * 60 * 1000));
+            document.getElementById('end-date').value = formatDate(now);
+            document.getElementById('end-time').value = formatTime(now);
+            document.getElementById('start-date').value = formatDate(twoWeeksAgo);
+            document.getElementById('start-time').value = formatTime(twoWeeksAgo);
+            document.getElementById('device-type').value = '';
+            $('#device-ids').val(null).trigger('change'); // Reset Select2
+
+            clearAllMapResults(); // Clear map markers/tracks
+            // Reset results panel to initial state
+            resultsTitle.textContent = '查詢結果';
+            backBtn.style.display = 'none';
+            resultList.innerHTML = '<li class="result-item no-results">尚無查詢結果</li>';
+            currentDisplayedLevel = 'first';
+        });
+
+        // Close search panel (optional)
+        document.querySelector('.close-btn').addEventListener('click', function() {
+            document.querySelector('.search-panel-wrapper').style.display = 'none';
+        });
+
+        // ==========================================================
+        // Dummy Data Generation Function (for demonstration purposes)
+        // ==========================================================
+        function generateDummyLocationData(deviceIds, startDateStr, startTimeStr, endDateStr, endTimeStr) {
+            const startDateTime = new Date(`${startDateStr}T${startTimeStr}:00`);
+            const endDateTime = new Date(`${endDateStr}T${endTimeStr}:00`);
+            const results = [];
+
+            // Base coordinates for Taoyuan Airport area (TPE)
+            const baseLat = 25.078; // Approximate center of TPE
+            const baseLng = 121.232; // Approximate center of TPE
+
+            deviceIds.forEach(deviceId => {
+                const track = [];
+                let currentLat = baseLat + (Math.random() - 0.5) * 0.01; // Small random offset for each device
+                let currentLng = baseLng + (Math.random() - 0.5) * 0.01;
+                let currentTime = new Date(startDateTime.getTime());
+
+                // Generate points at random intervals (e.g., every 5-30 minutes)
+                while (currentTime.getTime() <= endDateTime.getTime()) {
+                    track.push({
+                        timestamp: currentTime.toISOString(),
+                        latitude: currentLat + (Math.random() - 0.5) * 0.0005, // Very small random movement for path
+                        longitude: currentLng + (Math.random() - 0.5) * 0.0005
+                    });
+
+                    // Move current position slightly for next point
+                    currentLat += (Math.random() - 0.5) * 0.0001;
+                    currentLng += (Math.random() - 0.5) * 0.0001;
+
+                    const interval = Math.floor(Math.random() * (30 - 5 + 1) + 5) * 60 * 1000; // 5-30 minutes
+                    currentTime = new Date(currentTime.getTime() + interval);
+                    if (track.length > 300) break; // Limit track length for demo to prevent excessive points
+                }
+
+                if (track.length > 0) {
+                    results.push({
+                        deviceId: deviceId,
+                        deviceType: deviceId.split('-')[0], // Extract type from ID for dummy data
+                        latestPosition: track[track.length - 1], // The very last point
+                        fullTrack: track // All points in the period
+                    });
+                }
+            });
+            return results;
+        }
+
+        // Helper functions for date formatting
+        function formatDate(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        function formatTime(date) {
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            return `${hours}:${minutes}`;
+        }
+    </script>
+</body>
+</html>
