@@ -479,7 +479,7 @@
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
-    <script>
+<script>
         // Leaflet Map Initialization
         // Adjust initial view for Taoyuan International Airport Area, which is closer to the provided coordinates
         // TPE Airport approximate center: 25.078 N, 121.232 E
@@ -525,6 +525,9 @@
             // Date validation for max two weeks
             document.getElementById('end-date').addEventListener('change', validateDateRange);
             document.getElementById('start-date').addEventListener('change', validateDateRange);
+            
+            // Initialize results panel state on load
+            renderResultsFirstLevel(); 
         });
 
         function validateDateRange() {
@@ -548,6 +551,7 @@
                     alert('結束日期不能早於開始日期！');
                     endDateInput.value = startDateInput.value; // Set to start date
                     return;
+                    
                 }
                 
                 const twoWeeksLater = new Date(startDate.getTime() + (14 * 24 * 60 * 60 * 1000));
@@ -692,7 +696,7 @@
         function renderResultsFirstLevel() {
             currentDisplayedLevel = 'first';
             resultsTitle.textContent = '查詢結果';
-            backBtn.style.display = 'none';
+            backBtn.style.display = 'none'; // Ensure back button is hidden on first level
             resultList.innerHTML = ''; // Clear current content
 
             // Clear map track and re-add only latest markers
@@ -702,7 +706,7 @@
             // Re-populate with the latest positions of all queried devices
             const deviceResultsArray = Object.values(allQueryResultData);
             if (deviceResultsArray.length === 0) {
-                resultList.innerHTML = '<li class="result-item no-results">無符合條件的裝備位置</li>';
+                resultList.innerHTML = '<li class="result-item no-results">尚無查詢結果</li>';
                 return;
             }
 
@@ -745,7 +749,7 @@
         function renderResultsSecondLevel(deviceId) {
             currentDisplayedLevel = 'second';
             resultsTitle.textContent = `${deviceId} - 詳細軌跡`;
-            backBtn.style.display = 'flex'; // Show back button
+            backBtn.style.display = 'flex'; // Ensure back button is shown on second level
             resultList.innerHTML = ''; // Clear current content
 
             const deviceData = allQueryResultData[deviceId];
@@ -828,10 +832,8 @@
 
             clearAllMapResults(); // Clear map markers/tracks
             // Reset results panel to initial state
-            resultsTitle.textContent = '查詢結果';
-            backBtn.style.display = 'none';
-            resultList.innerHTML = '<li class="result-item no-results">尚無查詢結果</li>';
-            currentDisplayedLevel = 'first';
+            allQueryResultData = {}; // Clear stored data
+            renderResultsFirstLevel(); // Re-render to show "尚無查詢結果" and hide back button
         });
 
         // Close search panel (optional)
